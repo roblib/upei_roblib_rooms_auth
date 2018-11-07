@@ -1,0 +1,143 @@
+<?php
+/**
+ * @file
+ * The drupal module file for upei_roblib_rooms_auth module
+ */
+
+// The role to use to grant permission to book rooms.
+const ROOM_BOOKING = 'room booking';
+
+/**
+ * The administration form for the upei_roblib_rooms_auth module.
+ *
+ * @param array $form
+ *   The Drupal form definition.
+ * @param array $form_state
+ *   The Drupal form state.
+ *
+ * @return array
+ *   The Drupal form definition.
+ */
+function upei_roblib_rooms_auth_admin_form($form, &$form_state) {
+  $form = [];
+  $options = [
+    'username' => t('Use Username'),
+    'email' => t('Use Email Address'),
+  ];
+  $form['upei_roblib_rooms_auth_source_file'] = [
+    '#required' => TRUE,
+    '#type' => 'textarea',
+    '#title' => t('The Path to a file containing a list of allowed users'),
+    '#description' => t('This file should be a list of usernames containing one entry per line'),
+    '#default_value' => variable_get('upei_roblib_rooms_auth_source_file'),
+    '#required' => TRUE,
+  ];
+  $form['upei_roblib_rooms_auth_user_source'] = [
+    '#title' => t('Use Email or Username'),
+    '#type' => 'radios',
+    '#description' => t('Select what the data the file will contain, either a list of usernames or a list of emails'),
+    '#options' => $options,
+    '#default_value' => variable_get('upei_roblib_rooms_auth_user_source'),
+    '#required' => TRUE,
+  ];
+  $form['submit'] = [
+    '#type' => 'submit',
+    '#value' => t('Submit'),
+  ];
+
+  return $form;
+}
+
+
+/**
+ * Validate the admin form.
+ *
+ * @param array $form
+ * @param array $form
+ */
+function upei_roblib_rooms_auth_admin_form_validate($form, &$form_state) {
+  $source_file = $form_state['values']['upei_roblib_rooms_auth_source_file'];
+  $arr = file($source_file, FILE_IGNORE_NEW_LINES);
+  if(empty($arr)){
+    form_set_error('upei_roblib_rooms_auth_source_file', t('Error reading or parsing the users source file.'));
+  }
+}
+
+/**
+ * Submit the admin form.
+ *
+ * @param array $form
+ * @param array $form_state
+ */
+function upei_roblib_rooms_auth_admin_form_submit($form, &$form_state) {
+  variable_set('upei_roblib_rooms_auth_source_file', $form_state['values']['upei_roblib_rooms_auth_source_file']);
+  variable_set('upei_roblib_rooms_auth_user_source', $form_state['values']['upei_roblib_rooms_auth_user_source']);
+}
+
+/**
+ * Implements hook_menu().
+ *
+ */
+function upei_roblib_rooms_auth_menu() {
+
+  $items = [];
+
+  $items['admin/settings/roblib_rooms_auth'] = [
+    'title' => 'UPEI Roblib Rooms Auth settings',
+    'description' => 'Conifiguration for the UPEI Roblib Rooms Auth forms',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => ['upei_roblib_rooms_auth_admin_form'],
+    'access arguments' => ['access administration pages'],
+    'type' => MENU_NORMAL_ITEM,
+  ];
+
+
+  return $items;
+}
+
+/**
+ * Implements hook_user_login().
+ *
+ */
+function upei_roblib_rooms_auth_user_login(&$edit, $account) {
+  $source_file = variable_get('upei_roblib_rooms_auth_source_file');
+  $source = variable_get('upei_roblib_rooms_auth_user_source', 'username');
+  if (empty($source_file)) {
+    drupal_set_message(t('Cannot load a list of authorized users please check the UPEI Rooms Auth modules config.'));
+    return;
+  }
+  $roles = user_roles();
+
+  if (!in_array(ROOM_BOOKING, $roles)) {
+    // create the new role and add appropriate permissions
+    $room_role = new stdClass();
+    $room_role->name = ROOM_BOOKING;
+    user_role_save($room_role);
+
+    $permissions = [
+      'create room reservations standard',
+      'view room reservations calendar',
+    ];
+
+    user_role_grant_permissions($room_role->rid, $permissions);
+  }
+  $room_role = user_role_load_by_name(ROOM_BOOKING);
+  $authorised_users = file($source_file, FILE_IGNORE_NEW_LINES);
+
+  if (empty($authorised_users)) {
+    drupal_set_message(t('Cannot parse the list of authorized users please check the UPEI Rooms Auth modules file content.'));
+    return;
+  }
+  $value = ($source == 'username') ? $account->name : $account->mail;
+
+  $user_ok = in_array($value, $authorised_users);
+  $user_has_role = in_array(ROOM_BOOKING, $account->roles);
+
+  if ($user_ok && !$user_has_role) {
+    user_multiple_role_edit([$account->uid], 'add_role', $room_role->rid);
+  }
+  elseif (!$user_ok && $user_has_role) {
+    user_multiple_role_edit([$account->uid], 'remove_role', $room_role->rid);
+  }
+
+}

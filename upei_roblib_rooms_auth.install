@@ -1,0 +1,20 @@
+<?php
+
+/**
+ * @file
+ * This file contains all install and uninstall related hooks.
+ */
+
+
+/**
+ * Implements hook_uninstall().
+ *
+ */
+function upei_roblib_rooms_auth_uninstall() {
+
+  $variables = [
+    'upei_roblib_rooms_auth_source_file',
+    'upei_roblib_rooms_auth_user_source',
+  ];
+  array_walk($variables, 'variable_del');
+}

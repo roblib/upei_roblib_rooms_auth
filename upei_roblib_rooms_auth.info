@@ -1,0 +1,3 @@
+name = UPEI Robertson Library Rooms Auth
+description = Adds a role on login to certain users so they can book rooms
+core = 7.x
