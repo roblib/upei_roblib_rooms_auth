@@ -130,7 +130,7 @@ function upei_roblib_rooms_auth_user_login(&$edit, $account) {
   }
   $value = ($source == 'username') ? $account->name : $account->mail;
 
-  $user_ok = in_array($value, $authorised_users);
+  $user_ok = in_array(strtolower($value), $authorised_users);
   $user_has_role = in_array(ROOM_BOOKING, $account->roles);
 
   if ($user_ok && !$user_has_role) {
